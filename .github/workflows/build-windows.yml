@@ -29,7 +29,7 @@ jobs:
 
       - name: Create electron-builder config
         run: |
-          cat > build-config.json <<'EOF'
+          $json = @'
           {
             "appId": "com.rulu.rulu-ide",
             "productName": "Rulu IDE",
@@ -40,7 +40,8 @@ jobs:
               "icon": "icon/rulu.ico"
             }
           }
-          EOF
+          '@
+          $json | Out-File -FilePath build-config.json -Encoding utf8
 
       - name: Build Windows executable
         run: npx electron-builder --win --x64 --config build-config.json --publish never
