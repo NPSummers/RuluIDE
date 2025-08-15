@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rulu IDE</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'JetBrains Mono', monospace;
+            background-color: #2b2b2b;
+            color: #a9b7c6;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+
+        #sidebar {
+            width: 250px;
+            background-color: #3c3f41;
+            padding: 10px;
+            overflow-y: auto;
+        }
+
+        #editor-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #toolbar {
+            padding: 8px;
+            background-color: #3c3f41;
+            border-bottom: 1px solid #4b4e50;
+        }
+
+        #editor {
+            flex-grow: 1;
+        }
+
+        #statusbar {
+            padding: 5px;
+            background-color: #3c3f41;
+            border-top: 1px solid #4b4e50;
+            font-size: 12px;
+        }
+
+        .toolbar-btn {
+            padding: 6px;
+            color: #a9b7c6;
+        }
+
+        .toolbar-btn:hover {
+            background-color: #4b4e50;
+        }
+
+        #jstree {
+            color: #a9b7c6;
+        }
+
+        .jstree-default .jstree-anchor {
+            color: #a9b7c6;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <div id="jstree"></div>
+        </div>
+        <div id="editor-container">
+            <div id="toolbar" class="flex space-x-2">
+                <button id="openProject" class="toolbar-btn" title="Open Project"><i
+                        class="fas fa-folder-open"></i></button>
+                <button id="saveFile" class="toolbar-btn" title="Save File"><i class="fas fa-save"></i></button>
+                <button id="saveAsFile" class="toolbar-btn" title="Save As"><i class="fas fa-file-export"></i></button>
+                <button id="runCode" class="toolbar-btn" title="Run Code"><i class="fas fa-play"></i></button>
+            </div>
+            <div id="editor"></div>
+            <div id="terminal" style="height:160px; background:#1e1e1e; color:#e6e6e6; padding:8px; overflow:auto; font-family: 'JetBrains Mono', monospace; font-size:13px; border-top:1px solid #333; white-space: pre-wrap;">Terminal output will appear here</div>
+            <div id="statusbar">No file selected | Rulu</div>
+        </div>
+    </div>
+
+    <script src="./node_modules/jquery/dist/jquery.min.js"></script>
+    <script src="./node_modules/jstree/dist/jstree.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs/loader.min.js"></script>
+    <script>
+        require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.0/min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            // Define Darcula-like theme with token rules
+            monaco.editor.defineTheme('darcula', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'keyword', foreground: '#cc7832', fontStyle: 'bold' }, // fn, let, mut, const, if, else, for, in, match, continue, break, pub, use, mod
+                    { token: 'number', foreground: '#6897bb' }, // Numbers
+                    { token: 'constant', foreground: '#9876aa' }, // true, false, null
+                    { token: 'comment', foreground: '#808080', fontStyle: 'italic' }, // // comments
+                    { token: 'string', foreground: '#6a8759' }, // Strings
+                    { token: 'operator', foreground: '#a9b7c6' }, // =>, ..=, ::, ==, +, -, etc.
+                    { token: 'type', foreground: '#4ec9b0' }, // number (type annotation)
+                    { token: 'delimiter', foreground: '#a9b7c6' }, // [], {}, (), ;
+                    { token: 'identifier', foreground: '#a9b7c6' } // Variable names, function names
+                ],
+                colors: {
+                    'editor.background': '#2b2b2b',
+                    'editor.foreground': '#a9b7c6',
+                    'editorLineNumber.foreground': '#606770',
+                    'editorLineNumber.activeForeground': '#9876aa'
+                }
+            });
+
+            // Define Rulu syntax
+            monaco.languages.register({ id: 'rulu' });
+            monaco.languages.setMonarchTokensProvider('rulu', {
+                keywords: ['fn', 'let', 'mut', 'const', 'if', 'else', 'for', 'in', 'match', 'continue', 'break', 'pub', 'use', 'mod', 'self'],
+                operators: ['=>', '..=', '::', '==', '+', '-', '*', '/', '=', '>', '<'],
+                tokenizer: {
+                    root: [
+                        [/\b(fn|let|mut|const|if|else|for|in|match|continue|break|pub|use|mod|self)\b/, 'keyword'],
+                        [/\b\d+\b/, 'number'],
+                        [/\b(true|false|null)\b/, 'constant'],
+                        [/\/\/.*$/, 'comment'],
+                        [/"[^"]*"/, 'string'],
+                        [/'[^']*'/, 'string'],
+                        [/(=>|\.\.=|::|==|[+\-*\/=><])/, 'operator'],
+                        [/\b(number)\b/, 'type'],
+                        [/[\[\]\{\}\(\);]/, 'delimiter'],
+                        [/[a-zA-Z_]\w*(?=\s*::)/, 'identifier'], // Module paths (e.g., quux in quux::bar)
+                        [/[a-zA-Z_]\w*/, 'identifier'] // Variable/function names
+                    ]
+                }
+            });
+            monaco.languages.setLanguageConfiguration('rulu', {
+                comments: { lineComment: '//' },
+                brackets: [['{', '}'], ['(', ')'], ['[', ']']],
+                autoClosingPairs: [
+                    { open: '{', close: '}' },
+                    { open: '(', close: ')' },
+                    { open: '[', close: ']' },
+                    { open: '"', close: '"' },
+                    { open: "'", close: "'" }
+                ]
+            });
+
+            // Create editor with example Rulu code
+            window.editor = monaco.editor.create(document.getElementById('editor'), {
+                value: `// Welcome to Rulu IDE\nfn main() {\n  let mut x: number = 1;\n  x = x + 2;\n  const LIMIT: number = 3;\n  if x > 2 {\n    print("yes");\n  } else {\n    print("no");\n  }\n}`,
+                language: 'rulu',
+                theme: 'darcula',
+                fontFamily: 'JetBrains Mono',
+                fontSize: 14,
+                automaticLayout: true
+            });
+        });
+
+        // File tree
+        $(document).ready(function () {
+            $('#jstree').jstree({
+                'core': {
+                    'data': function (node, cb) {
+                        window.api.invoke('get-files', node.id === '#' ? '' : node.id).then(files => {
+                            cb(files);
+                        });
+                    }
+                }
+            }).on('select_node.jstree', function (e, data) {
+                if (data.node.original.type === 'file') {
+                    window.api.invoke('open-file', data.node.id).then(result => {
+                        if (result) {
+                            window.editor.setValue(result.content);
+                            window.currentFilePath = result.filePath;
+                            document.getElementById('statusbar').textContent = `${result.filePath} | Rulu`;
+                        }
+                    });
+                }
+            });
+        });
+
+        // IPC communication
+        // Track currently opened file path
+        window.currentFilePath = null;
+
+        document.getElementById('openProject').addEventListener('click', () => {
+            window.api.invoke('open-project').then(path => {
+                if (path) {
+                    // remember project root so new files and saves default to it
+                    window.projectRoot = path;
+                    // set the tree root id to the actual path so get-files receives it
+                    $('#jstree').jstree(true).settings.core.data = { id: path, text: path, children: true };
+                    $('#jstree').jstree(true).redraw(true);
+                }
+            });
+        });
+        document.getElementById('saveFile').addEventListener('click', () => {
+            // Save should overwrite the current file if available, else create in project root
+            window.api.invoke('save-file-silent', { content: window.editor.getValue(), filePath: window.currentFilePath, defaultDir: window.projectRoot }).then(filePath => {
+                if (filePath) {
+                    window.currentFilePath = filePath;
+                    document.getElementById('statusbar').textContent = `${filePath} | Rulu`;
+                }
+            });
+        });
+
+        // Save As always prompts the user for a location
+        document.getElementById('saveAsFile').addEventListener('click', () => {
+            window.api.invoke('save-file', window.editor.getValue()).then(filePath => {
+                if (filePath) {
+                    window.currentFilePath = filePath;
+                    document.getElementById('statusbar').textContent = `${filePath} | Rulu`;
+                }
+            });
+        });
+        document.getElementById('runCode').addEventListener('click', () => {
+            const terminalEl = document.getElementById('terminal');
+            terminalEl.textContent = 'Running...';
+            // Save to current file if present, otherwise create in project root (no Save As prompt)
+            window.api.invoke('save-file-silent', { content: window.editor.getValue(), filePath: window.currentFilePath, defaultDir: window.projectRoot }).then(filePath => {
+                if (!filePath) {
+                    terminalEl.textContent = 'Save cancelled.';
+                    return;
+                }
+                window.currentFilePath = filePath;
+                document.getElementById('statusbar').textContent = `${filePath} | Rulu`;
+                window.api.invoke('run-rulu', filePath).then(result => renderRunResult(result, terminalEl));
+            });
+        });
+
+        function renderRunResult(result, terminalEl) {
+            if (!result) {
+                terminalEl.textContent = 'No result from run.';
+                return;
+            }
+            let out = '';
+            if (result.stdout) out += result.stdout;
+            if (result.stderr) out += (out ? '\n' : '') + result.stderr;
+            out += `\n\nExit code: ${result.code}`;
+            terminalEl.textContent = out;
+            terminalEl.scrollTop = terminalEl.scrollHeight;
+        }
+    </script>
+</body>
+
+</html>

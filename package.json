@@ -1,0 +1,13 @@
+{
+  "name": "rulu-ide",
+  "version": "1.0.0",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^25.3.0",
+    "jstree": "^3.3.12",
+    "jquery": "^3.6.0"
+  }
+}
