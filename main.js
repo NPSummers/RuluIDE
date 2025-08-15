@@ -5,10 +5,17 @@ const { execFile } = require('child_process');
 
 let mainWindow;
 
+const isMac = process.platform === 'darwin';
+// Ensure Windows shows the app icon correctly in the taskbar
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.rulu.rulu-ide');
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, 'icon', 'rulu.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

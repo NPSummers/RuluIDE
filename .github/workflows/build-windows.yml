@@ -1,0 +1,52 @@
+name: Build Windows Exe
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Install electron-builder and png-to-ico
+        run: npm install --no-save --save-dev electron-builder png-to-ico
+
+      - name: Convert PNG icon to ICO
+        run: |
+          node -e "const fs=require('fs');const pngToIco=require('png-to-ico');pngToIco('icon/rulu.png').then(buf=>fs.writeFileSync('icon/rulu.ico',buf)).catch(e=>{console.error(e);process.exit(1)})"
+
+      - name: Create electron-builder config
+        run: |
+          cat > build-config.json <<'EOF'
+          {
+            "appId": "com.rulu.rulu-ide",
+            "productName": "Rulu IDE",
+            "directories": { "output": "dist" },
+            "files": [ "**/*" ],
+            "win": {
+              "target": ["portable"],
+              "icon": "icon/rulu.ico"
+            }
+          }
+          EOF
+
+      - name: Build Windows executable
+        run: npx electron-builder --win --x64 --config build-config.json --publish never
+
+      - name: Upload built exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: rulu-windows
+          path: dist/*.exe
